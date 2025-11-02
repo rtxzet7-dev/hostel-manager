@@ -4603,11 +4603,8 @@
             }
         }
 
-        // Initialize authentication check
-        checkAuthentication();
-
-        // ROOMS MANAGEMENT SYSTEM
-        const roomsManager = {
+        // ROOMS MANAGEMENT SYSTEM  
+        var roomsManager = {
             // Configuration
             ROOMS_KEY: "hostel_rooms_config_v12",
             BEDS_STATE_KEY: "hostel_beds_state_v12",
@@ -5680,6 +5677,9 @@
                 statsEl.textContent = `${currentLanguage === 'ru' ? 'Всего мест' : currentLanguage === 'uz' ? 'Jami joylar' : 'Total beds'}: ${totalBeds} · ${currentLanguage === 'ru' ? 'Свободно' : currentLanguage === 'uz' ? 'Bo\'sh' : 'Free'}: ${totalBeds - occupiedBeds} · ${currentLanguage === 'ru' ? 'Занято' : currentLanguage === 'uz' ? 'Band' : 'Occupied'}: ${occupiedBeds}`;
             }
         };
+
+        // Initialize authentication check (after roomsManager is defined)
+        checkAuthentication();
 
         // Copy to clipboard functionality
         document.addEventListener('DOMContentLoaded', function() {
