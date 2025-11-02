@@ -7,14 +7,16 @@ from functools import wraps
 
 app = Flask(__name__)
 
-# Разрешаем CORS для всех доменов (для общего доступа)
-# В продакшене можно ограничить конкретным доменом Netlify
-allowed_origins = os.getenv('ALLOWED_ORIGINS', '*')
-if allowed_origins == '*':
-    CORS(app, resources={r"/*": {"origins": "*"}})
-else:
-    origins_list = allowed_origins.split(',')
-    CORS(app, resources={r"/*": {"origins": origins_list}})
+# Разрешаем CORS для всех доменов
+CORS(app, 
+     resources={r"/*": {
+         "origins": "*",
+         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+         "allow_headers": ["Content-Type", "Authorization"],
+         "expose_headers": ["Content-Type", "Authorization"],
+         "supports_credentials": False,
+         "max_age": 3600
+     }})
 
 # Путь к файлам данных
 DATA_DIR = 'data'
