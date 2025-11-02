@@ -33,8 +33,15 @@ function getApiBaseUrl() {
         return 'https://hostel-manager-backend-h6e4.onrender.com/api';
     }
     
+    // Для вашего домена (измените на свой после покупки)
+    // Пример: if (hostname.includes('myhostellux.com'))
+    if (hostname.includes('yourdomain.com')) {
+        console.log('🏠 Custom domain detected, using Render backend');
+        return 'https://hostel-manager-backend-h6e4.onrender.com/api';
+    }
+    
     // Для других адресов используем Render
-    console.log('🌍 Unknown hostname, using Render backend');
+    console.log('🌍 Production domain, using Render backend');
     return 'https://hostel-manager-backend-h6e4.onrender.com/api';
 }
 
