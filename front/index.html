@@ -3971,9 +3971,143 @@
         // Print function
         function printReport() {
             showNotification('Подготовка к печати...', 'success');
+            
+            const monthKey = currentDate.toFormat('yyyy-MM');
+            const monthName = currentDate.toFormat('MMMM yyyy');
+            const daysInMonth = currentDate.daysInMonth;
+            
+            // Создаем HTML для печати
+            let html = `
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Табель - ${monthName}</title>
+                    <style>
+                        @page { 
+                            size: landscape; 
+                            margin: 10mm;
+                        }
+                        body { 
+                            font-family: Arial, sans-serif; 
+                            margin: 0;
+                            padding: 20px;
+                        }
+                        h2 { 
+                            text-align: center; 
+                            margin-bottom: 20px;
+                            font-size: 18px;
+                        }
+                        table { 
+                            border-collapse: collapse; 
+                            width: 100%; 
+                            font-size: 10px;
+                            page-break-inside: avoid;
+                        }
+                        th, td { 
+                            border: 1px solid #000; 
+                            padding: 4px 2px; 
+                            text-align: center;
+                        }
+                        th { 
+                            background-color: #7c4dff; 
+                            color: white; 
+                            font-weight: bold;
+                            font-size: 9px;
+                        }
+                        .employee-name {
+                            text-align: left;
+                            font-weight: bold;
+                            padding-left: 5px;
+                        }
+                        .worked { 
+                            background-color: #10b981; 
+                            color: white; 
+                            font-weight: bold;
+                        }
+                        .summary { 
+                            background-color: #fbbf24; 
+                            font-weight: bold;
+                        }
+                        .footer {
+                            margin-top: 15px;
+                            font-size: 10px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <h2>Табель учета рабочего времени - ${monthName}</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th rowspan="2">№</th>
+                                <th rowspan="2">Сотрудник</th>
+                                <th rowspan="2">Должность</th>
+                                <th rowspan="2">Ставка</th>
+                                <th colspan="${daysInMonth}">Дни месяца</th>
+                                <th rowspan="2">Смен</th>
+                                <th rowspan="2">Сумма (сум)</th>
+                            </tr>
+                            <tr>`;
+            
+            // Дни 1-31
+            for (let day = 1; day <= daysInMonth; day++) {
+                html += `<th>${day}</th>`;
+            }
+            html += `</tr></thead><tbody>`;
+            
+            // Данные сотрудников
+            let rowNum = 1;
+            let totalShifts = 0;
+            let totalAmount = 0;
+            
+            Object.entries(staffData).forEach(([id, employee]) => {
+                const workedDays = employee.workedDays[monthKey] || [];
+                const shiftsCount = workedDays.length;
+                const amount = shiftsCount * employee.rate;
+                
+                totalShifts += shiftsCount;
+                totalAmount += amount;
+                
+                html += '<tr>';
+                html += `<td>${rowNum++}</td>`;
+                html += `<td class="employee-name">${employee.name}</td>`;
+                html += `<td>${employee.position === 'admin' ? 'Админ' : employee.position === 'cleaner' ? 'Техничка' : 'Охранник'}</td>`;
+                html += `<td>${employee.rate.toLocaleString('ru-RU')}</td>`;
+                
+                // Отмечаем рабочие дни
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const isWorked = workedDays.includes(day);
+                    html += `<td class="${isWorked ? 'worked' : ''}">${isWorked ? '✓' : ''}</td>`;
+                }
+                
+                html += `<td><strong>${shiftsCount}</strong></td>`;
+                html += `<td><strong>${amount.toLocaleString('ru-RU')}</strong></td>`;
+                html += '</tr>';
+            });
+            
+            // Итоговая строка
+            html += '<tr class="summary">';
+            html += `<td colspan="${4 + daysInMonth}" style="text-align: right; padding-right: 10px;">ИТОГО:</td>`;
+            html += `<td>${totalShifts}</td>`;
+            html += `<td>${totalAmount.toLocaleString('ru-RU')}</td>`;
+            html += '</tr>';
+            
+            html += `</tbody></table>
+                    <div class="footer">
+                        <strong>Дата формирования:</strong> ${new Date().toLocaleString('ru-RU')}
+                    </div>
+                </body>
+                </html>`;
+            
+            // Открываем в новом окне для печати
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(html);
+            printWindow.document.close();
+            
+            // Печатаем после загрузки
             setTimeout(() => {
-                window.print();
-            }, 1000);
+                printWindow.print();
+            }, 500);
         }
 
         // Export to Excel function
