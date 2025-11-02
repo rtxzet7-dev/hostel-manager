@@ -284,9 +284,19 @@ def get_rooms(current_user):
     # Возвращаем только данные текущего пользователя
     user_rooms = all_rooms.get(current_user, {})
     
+    # Если пусто, возвращаем пустую структуру
+    if not user_rooms:
+        user_rooms = {
+            'rooms': [],
+            'bedsState': {},
+            'residents': [],
+            'bedNumbers': {}
+        }
+    
     print(f"📥 Загрузка комнат для {current_user}: {len(user_rooms.get('rooms', [])) if isinstance(user_rooms.get('rooms'), list) else 'unknown'}")
     
-    return jsonify({'rooms': user_rooms}), 200
+    # Возвращаем данные БЕЗ дополнительной обертки 'rooms'
+    return jsonify(user_rooms), 200
 
 @app.route('/api/rooms', methods=['POST'])
 @token_required
