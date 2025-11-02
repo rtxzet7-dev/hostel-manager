@@ -116,22 +116,15 @@ const API = {
     
     // Аутентификация
     async login(username, password) {
-        const result = await apiRequest('/auth/login', {
+        return apiRequest('/auth/login', {
             method: 'POST',
             body: JSON.stringify({ username, password })
         });
-        
-        if (result.token) {
-            localStorage.setItem('auth_token', result.token);
-        }
-        
-        return result;
     },
     
-    async register(username, password) {
-        return apiRequest('/auth/register', {
-            method: 'POST',
-            body: JSON.stringify({ username, password })
+    async verifyToken() {
+        return apiRequest('/auth/verify', {
+            method: 'GET'
         });
     },
     

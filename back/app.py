@@ -213,6 +213,44 @@ def login():
         }
     }), 200
 
+@app.route('/api/auth/verify', methods=['GET'])
+@token_required
+def verify_token(current_user):
+    """Проверка валидности токена и статуса пользователя"""
+    users = load_json(USERS_FILE)
+    
+    if current_user not in users:
+        return jsonify({'valid': False, 'error': 'User not found'}), 404
+    
+    user = users[current_user]
+    
+    # Проверяем статус
+    if user['status'] == 'pending':
+        return jsonify({'valid': False, 'error': 'Account pending', 'status': 'pending'}), 403
+    
+    if user['status'] == 'expired':
+        return jsonify({'valid': False, 'error': 'Account expired', 'status': 'expired'}), 403
+    
+    if user['status'] == 'suspended':
+        return jsonify({'valid': False, 'error': 'Account suspended', 'status': 'suspended'}), 403
+    
+    # Проверяем срок действия
+    if user.get('accessExpires'):
+        if datetime.fromisoformat(user['accessExpires']) < datetime.now():
+            user['status'] = 'expired'
+            users[current_user] = user
+            save_json(USERS_FILE, users)
+            return jsonify({'valid': False, 'error': 'Account expired', 'status': 'expired'}), 403
+    
+    return jsonify({
+        'valid': True,
+        'user': {
+            'username': current_user,
+            'role': user['role'],
+            'status': user['status']
+        }
+    }), 200
+
 @app.route('/api/auth/users', methods=['GET'])
 @token_required
 def get_users(current_user):
