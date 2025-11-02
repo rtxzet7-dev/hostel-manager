@@ -1489,22 +1489,66 @@
                 grid-template-columns: 1fr; 
                 gap: 1rem;
             }
-            .resident-header, .resident-row {
-                grid-template-columns: 1fr;
-                gap: 0.5rem;
-                padding: 0.75rem;
+            /* Скрываем заголовок таблицы на мобильных */
+            .resident-header {
+                display: none !important;
             }
-            .resident-header > div, .resident-row > div {
-                display: flex;
+            
+            /* Карточный вид для жильцов */
+            .resident-row {
+                display: block !important;
+                background: rgba(124, 77, 255, 0.08) !important;
+                border: 1px solid rgba(124, 77, 255, 0.3) !important;
+                border-radius: 12px !important;
+                padding: 1rem !important;
+                margin-bottom: 1rem !important;
+            }
+            
+            .resident-row > div {
+                display: flex !important;
                 justify-content: space-between;
                 align-items: center;
-                padding: 0.5rem 0;
-                border-bottom: 1px solid rgba(255,255,255,0.05);
+                padding: 0.6rem 0 !important;
+                border-bottom: 1px solid rgba(255,255,255,0.08);
+                font-size: 0.9rem !important;
             }
-            .resident-header > div:before, .resident-row > div:before {
+            
+            .resident-row > div:last-child {
+                border-bottom: none;
+            }
+            
+            /* Номер жильца - крупнее и ярче */
+            .resident-row > div:first-child {
+                font-size: 1.2rem !important;
+                font-weight: 700;
+                color: #7c4dff;
+                justify-content: center;
+                padding: 0.5rem !important;
+                background: rgba(124, 77, 255, 0.1);
+                border-radius: 8px;
+                margin-bottom: 0.5rem;
+            }
+            
+            /* Имя жильца - крупнее */
+            .resident-row > div:nth-child(2) {
+                font-size: 1.1rem !important;
+                font-weight: 600;
+                color: #00e5ff;
+            }
+            
+            .resident-row > div:before {
                 content: attr(data-label);
                 font-weight: 600;
-                color: rgba(255,255,255,0.7);
+                color: rgba(255,255,255,0.6);
+                margin-right: 0.75rem;
+                font-size: 0.85rem;
+            }
+            
+            /* Поля ввода на всю ширину */
+            .resident-row input,
+            .resident-row select {
+                max-width: 55% !important;
+                font-size: 0.9rem !important;
             }
             .payment-stats {
                 grid-template-columns: 1fr 1fr;
@@ -2241,6 +2285,9 @@
                             </div>
                             <div class="print-btn no-print" id="printBtn" title="Печать отчета">
                                 <i class="fas fa-print"></i>
+                            </div>
+                            <div class="print-btn no-print" id="excelBtn" title="Экспорт в Excel" style="background: linear-gradient(135deg, #10b981, #059669);">
+                                <i class="fas fa-file-excel"></i>
                             </div>
                         </div>
 
@@ -3929,6 +3976,96 @@
             }, 1000);
         }
 
+        // Export to Excel function
+        function exportToExcel() {
+            showNotification('Подготовка Excel файла...', 'success');
+            
+            const monthKey = currentDate.toFormat('yyyy-MM');
+            const monthName = currentDate.toFormat('MMMM yyyy');
+            
+            // Создаем HTML таблицу
+            let html = '<html><head><meta charset="UTF-8"><style>';
+            html += 'table { border-collapse: collapse; width: 100%; font-family: Arial; }';
+            html += 'th, td { border: 1px solid black; padding: 8px; text-align: center; }';
+            html += 'th { background-color: #7c4dff; color: white; font-weight: bold; }';
+            html += '.worked { background-color: #10b981; color: white; font-weight: bold; }';
+            html += '.not-worked { background-color: #f3f4f6; }';
+            html += '.summary { background-color: #fbbf24; font-weight: bold; }';
+            html += '</style></head><body>';
+            
+            html += `<h2 style="text-align: center;">Табель учета рабочего времени - ${monthName}</h2>`;
+            
+            // Количество дней в месяце
+            const daysInMonth = currentDate.daysInMonth;
+            
+            // Заголовок таблицы
+            html += '<table><thead><tr>';
+            html += '<th rowspan="2">№</th>';
+            html += '<th rowspan="2">Сотрудник</th>';
+            html += '<th rowspan="2">Должность</th>';
+            html += '<th rowspan="2">Ставка</th>';
+            html += `<th colspan="${daysInMonth}">Дни месяца</th>`;
+            html += '<th rowspan="2">Смен</th>';
+            html += '<th rowspan="2">Сумма</th>';
+            html += '</tr><tr>';
+            
+            // Дни 1-31
+            for (let day = 1; day <= daysInMonth; day++) {
+                html += `<th>${day}</th>`;
+            }
+            html += '</tr></thead><tbody>';
+            
+            // Данные сотрудников
+            let rowNum = 1;
+            let totalShifts = 0;
+            let totalAmount = 0;
+            
+            Object.entries(staffData).forEach(([id, employee]) => {
+                const workedDays = employee.workedDays[monthKey] || [];
+                const shiftsCount = workedDays.length;
+                const amount = shiftsCount * employee.rate;
+                
+                totalShifts += shiftsCount;
+                totalAmount += amount;
+                
+                html += '<tr>';
+                html += `<td>${rowNum++}</td>`;
+                html += `<td style="text-align: left;"><strong>${employee.name}</strong></td>`;
+                html += `<td>${employee.position === 'admin' ? 'Администратор' : employee.position === 'cleaner' ? 'Техничка' : 'Охранник'}</td>`;
+                html += `<td>${employee.rate.toLocaleString('ru-RU')} сум</td>`;
+                
+                // Отмечаем рабочие дни
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const isWorked = workedDays.includes(day);
+                    html += `<td class="${isWorked ? 'worked' : 'not-worked'}">${isWorked ? '✓' : ''}</td>`;
+                }
+                
+                html += `<td><strong>${shiftsCount}</strong></td>`;
+                html += `<td><strong>${amount.toLocaleString('ru-RU')}</strong></td>`;
+                html += '</tr>';
+            });
+            
+            // Итоговая строка
+            html += '<tr class="summary">';
+            html += `<td colspan="${3 + daysInMonth + 1}" style="text-align: right;">ИТОГО:</td>`;
+            html += `<td>${totalShifts}</td>`;
+            html += `<td>${totalAmount.toLocaleString('ru-RU')} сум</td>`;
+            html += '</tr>';
+            
+            html += '</tbody></table>';
+            html += `<p style="margin-top: 20px;"><strong>Дата формирования:</strong> ${new Date().toLocaleString('ru-RU')}</p>`;
+            html += '</body></html>';
+            
+            // Создаем Blob и скачиваем
+            const blob = new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Табель_${monthName.replace(' ', '_')}.xls`;
+            link.click();
+            
+            showNotification('Excel файл загружен!', 'success');
+        }
+
         // Load staff data from backend
         async function loadStaffData() {
             if (staffDataLoaded) return;
@@ -4001,6 +4138,12 @@
             // Print button event
             if (printBtn) {
                 printBtn.addEventListener('click', printReport);
+            }
+            
+            // Excel export button event
+            const excelBtn = document.getElementById('excelBtn');
+            if (excelBtn) {
+                excelBtn.addEventListener('click', exportToExcel);
             }
             
             // Enter key support
