@@ -3590,35 +3590,8 @@
         });
 
         // AUTHENTICATION SYSTEM
-        const USERS_KEY = "hostel_users";
-        const STAFF_KEY = "hostel_staff";
         const LANGUAGE_KEY = "hostel_language";
-        let users = JSON.parse(localStorage.getItem(USERS_KEY)) || {};
-        let staff = JSON.parse(localStorage.getItem(STAFF_KEY)) || [];
         let currentUser = null;
-
-        // Initialize admin user if not exists
-        if (!users.Kvv) {
-            users.Kvv = {
-                password: 'Kvv08072001',
-                role: 'admin',
-                status: 'active',
-                accessExpires: '2099-12-31',
-                createdAt: new Date().toISOString(),
-                residentsCount: 0
-            };
-            localStorage.setItem(USERS_KEY, JSON.stringify(users));
-        }
-
-        // Initialize default staff if not exists
-        if (staff.length === 0) {
-            staff = [
-                { id: 1, name: "Администратор", position: "admin", salary: 50000, active: true },
-                { id: 2, name: "Техничка", position: "cleaner", salary: 30000, active: true },
-                { id: 3, name: "Охранник", position: "security", salary: 40000, active: true }
-            ];
-            localStorage.setItem(STAFF_KEY, JSON.stringify(staff));
-        }
 
         // Load saved language
         const savedLanguage = localStorage.getItem(LANGUAGE_KEY);
@@ -3640,7 +3613,7 @@
             }
         }
 
-        function register() {
+        async function register() {
             const username = document.getElementById('registerUsername').value.trim();
             const password = document.getElementById('registerPassword').value;
             const confirmPassword = document.getElementById('registerConfirmPassword').value;
@@ -3659,38 +3632,31 @@
                 return;
             }
 
-            if (users[username]) {
-                alert(currentLanguage === 'ru' ? 'Пользователь с таким логином уже существует' : 
-                      currentLanguage === 'uz' ? 'Bu login bilan foydalanuvchi mavjud' : 
-                      'User with this username already exists');
-                return;
+            try {
+                // Используем backend API для регистрации
+                const result = await API.register(username, password);
+                
+                alert(currentLanguage === 'ru' ? 'Регистрация успешна! Ожидайте подтверждения администратора.' : 
+                      currentLanguage === 'uz' ? 'Ro\'yxatdan o\'tish muvaffaqiyatli! Administrator tasdigini kuting.' : 
+                      'Registration successful! Wait for administrator confirmation.');
+                showAuthTab('login');
+                
+                // Clear form
+                document.getElementById('registerUsername').value = '';
+                document.getElementById('registerPassword').value = '';
+                document.getElementById('registerConfirmPassword').value = '';
+            } catch (error) {
+                console.error('Registration error:', error);
+                alert(currentLanguage === 'ru' ? `Ошибка регистрации: ${error.message}` : 
+                      currentLanguage === 'uz' ? `Ro'yxatdan o'tish xatosi: ${error.message}` : 
+                      `Registration error: ${error.message}`);
             }
-
-            // Register new user with pending status
-            users[username] = {
-                password: password,
-                role: 'user',
-                status: 'pending', // pending, active, expired, suspended
-                accessExpires: null,
-                createdAt: new Date().toISOString(),
-                residentsCount: 0
-            };
-
-            localStorage.setItem(USERS_KEY, JSON.stringify(users));
-            alert(currentLanguage === 'ru' ? 'Регистрация успешна! Ожидайте подтверждения администратора.' : 
-                  currentLanguage === 'uz' ? 'Ro\'yxatdan o\'tish muvaffaqiyatli! Administrator tasdigini kuting.' : 
-                  'Registration successful! Wait for administrator confirmation.');
-            showAuthTab('login');
-            
-            // Clear form
-            document.getElementById('registerUsername').value = '';
-            document.getElementById('registerPassword').value = '';
-            document.getElementById('registerConfirmPassword').value = '';
         }
 
-        function login() {
+        async function login() {
             const username = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value;
+            const messageEl = document.getElementById('loginMessage');
 
             if (!username || !password) {
                 alert(currentLanguage === 'ru' ? 'Введите логин и пароль' : 
@@ -3699,78 +3665,71 @@
                 return;
             }
 
-            const user = users[username];
-            
-            if (!user) {
-                document.getElementById('loginMessage').textContent = 
-                    currentLanguage === 'ru' ? 'Пользователь не найден' : 
-                    currentLanguage === 'uz' ? 'Foydalanuvchi topilmadi' : 
-                    'User not found';
-                document.getElementById('loginMessage').style.color = '#ff4757';
-                return;
+            try {
+                messageEl.textContent = currentLanguage === 'ru' ? 'Вход...' : 
+                                       currentLanguage === 'uz' ? 'Kirish...' : 
+                                       'Logging in...';
+                messageEl.style.color = '#00e5ff';
+
+                // Используем backend API для входа
+                const result = await API.login(username, password);
+                
+                // Проверка статуса пользователя
+                if (result.status === 'pending') {
+                    messageEl.textContent = 
+                        currentLanguage === 'ru' ? 'Аккаунт ожидает подтверждения администратора' : 
+                        currentLanguage === 'uz' ? 'Hisob administrator tasdigini kutmoqda' : 
+                        'Account is waiting for administrator confirmation';
+                    messageEl.style.color = '#ffa502';
+                    return;
+                }
+
+                if (result.status === 'expired') {
+                    messageEl.textContent = 
+                        currentLanguage === 'ru' ? 'Срок действия аккаунта истек' : 
+                        currentLanguage === 'uz' ? 'Hisob muddati tugagan' : 
+                        'Account has expired';
+                    messageEl.style.color = '#ff4757';
+                    return;
+                }
+
+                if (result.status === 'suspended') {
+                    messageEl.textContent = 
+                        currentLanguage === 'ru' ? 'Аккаунт заблокирован администратором' : 
+                        currentLanguage === 'uz' ? 'Hisob administrator tomonidan bloklangan' : 
+                        'Account is suspended by administrator';
+                    messageEl.style.color = '#ff4757';
+                    return;
+                }
+
+                // Успешный вход - сохраняем токен (уже сохранен в API.login)
+                currentUser = {
+                    username: result.username,
+                    role: result.role
+                };
+
+                localStorage.setItem('current_user', JSON.stringify(currentUser));
+                messageEl.textContent = '';
+                showApplication();
+            } catch (error) {
+                console.error('Login error:', error);
+                messageEl.textContent = 
+                    currentLanguage === 'ru' ? `Ошибка входа: ${error.message}` : 
+                    currentLanguage === 'uz' ? `Kirish xatosi: ${error.message}` : 
+                    `Login error: ${error.message}`;
+                messageEl.style.color = '#ff4757';
             }
-
-            if (user.password !== password) {
-                document.getElementById('loginMessage').textContent = 
-                    currentLanguage === 'ru' ? 'Неверный пароль' : 
-                    currentLanguage === 'uz' ? 'Noto\'g\'ri parol' : 
-                    'Incorrect password';
-                document.getElementById('loginMessage').style.color = '#ff4757';
-                return;
-            }
-
-            // Check user status
-            if (user.status === 'pending') {
-                document.getElementById('loginMessage').textContent = 
-                    currentLanguage === 'ru' ? 'Аккаунт ожидает подтверждения администратора' : 
-                    currentLanguage === 'uz' ? 'Hisob administrator tasdigini kutmoqda' : 
-                    'Account is waiting for administrator confirmation';
-                document.getElementById('loginMessage').style.color = '#ffa502';
-                return;
-            }
-
-            if (user.status === 'expired') {
-                document.getElementById('loginMessage').textContent = 
-                    currentLanguage === 'ru' ? 'Срок действия аккаунта истек' : 
-                    currentLanguage === 'uz' ? 'Hisob muddati tugagan' : 
-                    'Account has expired';
-                document.getElementById('loginMessage').style.color = '#ff4757';
-                return;
-            }
-
-            if (user.status === 'suspended') {
-                document.getElementById('loginMessage').textContent = 
-                    currentLanguage === 'ru' ? 'Аккаунт заблокирован администратором' : 
-                    currentLanguage === 'uz' ? 'Hisob administrator tomonidan bloklangan' : 
-                    'Account is suspended by administrator';
-                document.getElementById('loginMessage').style.color = '#ff4757';
-                return;
-            }
-
-            if (user.accessExpires && new Date(user.accessExpires) < new Date()) {
-                user.status = 'expired';
-                localStorage.setItem(USERS_KEY, JSON.stringify(users));
-                document.getElementById('loginMessage').textContent = 
-                    currentLanguage === 'ru' ? 'Срок действия аккаунта истек' : 
-                    currentLanguage === 'uz' ? 'Hisob muddati tugagan' : 
-                    'Account has expired';
-                document.getElementById('loginMessage').style.color = '#ff4757';
-                return;
-            }
-
-            // Successful login
-            currentUser = {
-                username: username,
-                role: user.role
-            };
-
-            localStorage.setItem('current_user', JSON.stringify(currentUser));
-            showApplication();
         }
 
         function logout() {
             currentUser = null;
             localStorage.removeItem('current_user');
+            localStorage.removeItem('auth_token'); // Удаляем токен
+            
+            // Сбрасываем флаг загрузки персонала для повторной загрузки при входе
+            staffDataLoaded = false;
+            staffData = {};
+            
             document.getElementById('appScreen').style.display = 'none';
             document.getElementById('authScreen').style.display = 'flex';
             closeAdminDropdown();
@@ -3822,7 +3781,9 @@
             console.log('✅ roomsManager инициализирован!');
             
             // Initialize staff management
-            initializeStaffManagement();
+            console.log('🔄 Инициализация staff management...');
+            await initializeStaffManagement();
+            console.log('✅ Staff management инициализирован!');
         }
 
         // Admin Dropdown functionality
@@ -3883,8 +3844,9 @@
         }
 
         // STAFF MANAGEMENT SYSTEM
-        let staffData = JSON.parse(localStorage.getItem('hostelStaff')) || {};
+        let staffData = {};
         let currentDate = luxon.DateTime.now();
+        let staffDataLoaded = false;
 
         // Color themes for employees
         const colorThemes = [
@@ -3967,8 +3929,44 @@
             }, 1000);
         }
 
+        // Load staff data from backend
+        async function loadStaffData() {
+            if (staffDataLoaded) return;
+            
+            const token = localStorage.getItem('auth_token');
+            if (!token || typeof API === 'undefined') {
+                // Загружаем из localStorage
+                console.log('📁 Загрузка персонала из localStorage...');
+                staffData = JSON.parse(localStorage.getItem('hostelStaff')) || {};
+                staffDataLoaded = true;
+                return;
+            }
+            
+            try {
+                console.log('📥 Загрузка персонала с сервера через API...');
+                const result = await API.getStaff();
+                
+                if (result && typeof result === 'object') {
+                    staffData = result;
+                    staffDataLoaded = true;
+                    console.log('✅ Персонал загружен с сервера! Сотрудников:', Object.keys(staffData).length);
+                } else {
+                    // Fallback to localStorage
+                    console.log('📁 Сервер вернул пустые данные, загрузка из localStorage...');
+                    staffData = JSON.parse(localStorage.getItem('hostelStaff')) || {};
+                    staffDataLoaded = true;
+                }
+            } catch (error) {
+                console.error('❌ Ошибка загрузки персонала:', error.message);
+                // Fallback to localStorage
+                staffData = JSON.parse(localStorage.getItem('hostelStaff')) || {};
+                staffDataLoaded = true;
+            }
+        }
+        
         // Initialize staff management
-        function initializeStaffManagement() {
+        async function initializeStaffManagement() {
+            await loadStaffData();
             updateMonthDisplay();
             renderStaff();
             updateStatistics();
@@ -4023,7 +4021,7 @@
         }
 
         // Add a new employee
-        function addEmployee() {
+        async function addEmployee() {
             const nameInput = document.getElementById('employeeName');
             const positionSelect = document.getElementById('employeePosition');
             const rateInput = document.getElementById('employeeRate');
@@ -4049,14 +4047,27 @@
             // Generate unique ID
             const employeeId = Date.now().toString();
             
-            staffData[employeeId] = {
+            const employeeData = {
                 name: name,
                 position: position,
                 rate: rate,
                 workedDays: {}
             };
             
-            saveStaffData();
+            staffData[employeeId] = employeeData;
+            
+            // Сохраняем на сервер
+            const token = localStorage.getItem('auth_token');
+            if (token && typeof API !== 'undefined') {
+                try {
+                    await API.createStaff(employeeData);
+                    console.log('✅ Сотрудник добавлен на сервер');
+                } catch (error) {
+                    console.error('❌ Ошибка добавления на сервер:', error.message);
+                }
+            }
+            
+            await saveStaffData();
             renderStaff();
             updateStatistics();
             
@@ -4089,20 +4100,49 @@
         }
 
         // Remove employee
-        function removeEmployee(employeeId) {
+        async function removeEmployee(employeeId) {
             const employeeName = staffData[employeeId].name;
             if (confirm(`Удалить сотрудника ${employeeName}?`)) {
                 delete staffData[employeeId];
-                saveStaffData();
+                
+                // Удаляем с сервера
+                const token = localStorage.getItem('auth_token');
+                if (token && typeof API !== 'undefined') {
+                    try {
+                        await API.deleteStaff(employeeId);
+                        console.log('✅ Сотрудник удален с сервера');
+                    } catch (error) {
+                        console.error('❌ Ошибка удаления с сервера:', error.message);
+                    }
+                }
+                
+                await saveStaffData();
                 renderStaff();
                 updateStatistics();
                 showNotification('Сотрудник удален', 'success');
             }
         }
 
-        // Save staff data to localStorage
-        function saveStaffData() {
+        // Save staff data to backend API
+        async function saveStaffData() {
+            // Сохраняем в localStorage как резервную копию
             localStorage.setItem('hostelStaff', JSON.stringify(staffData));
+            
+            const token = localStorage.getItem('auth_token');
+            if (!token || typeof API === 'undefined') {
+                console.warn('⚠️ Нет токена или API, сохранено только в localStorage');
+                return;
+            }
+            
+            try {
+                // Отправляем весь объект staffData
+                for (const [employeeId, employeeData] of Object.entries(staffData)) {
+                    await API.updateStaff(employeeId, employeeData);
+                }
+                console.log('✅ Персонал сохранен на сервер!');
+            } catch (error) {
+                console.error('❌ Ошибка сохранения персонала:', error.message);
+            }
         }
 
         // Update statistics
@@ -4220,48 +4260,62 @@
         }
 
         // USER MANAGEMENT FUNCTIONS
-        function loadAdminPendingUsers() {
+        async function loadAdminPendingUsers() {
             const pendingList = document.getElementById('adminPendingUsersList');
             if (!pendingList) return;
             
-            pendingList.innerHTML = '';
+            pendingList.innerHTML = '<p class="text-center">Загрузка...</p>';
             
-            Object.entries(users).forEach(([username, userData]) => {
-                if (userData.status === 'pending') {
-                    const userCard = document.createElement('div');
-                    userCard.className = 'user-card';
-                    userCard.innerHTML = `
-                        <div class="user-header">
-                            <div class="user-info">
-                                <div class="user-name">
-                                    ${username}
-                                    <span class="status-badge status-pending">${currentLanguage === 'ru' ? 'Ожидает' : currentLanguage === 'uz' ? 'Kutmoqda' : 'Pending'}</span>
+            try {
+                const result = await API.getUsers();
+                const allUsers = result.users || {};
+                pendingList.innerHTML = '';
+                
+                Object.entries(allUsers).forEach(([username, userData]) => {
+                    if (userData.status === 'pending') {
+                        const userCard = document.createElement('div');
+                        userCard.className = 'user-card';
+                        userCard.innerHTML = `
+                            <div class="user-header">
+                                <div class="user-info">
+                                    <div class="user-name">
+                                        ${username}
+                                        <span class="status-badge status-pending">${currentLanguage === 'ru' ? 'Ожидает' : currentLanguage === 'uz' ? 'Kutmoqda' : 'Pending'}</span>
+                                    </div>
+                                    <div class="user-email">${currentLanguage === 'ru' ? 'Логин:' : currentLanguage === 'uz' ? 'Login:' : 'Login:'} ${username}</div>
+                                    <div class="user-date">${currentLanguage === 'ru' ? 'Зарегистрирован:' : currentLanguage === 'uz' ? 'Ro\'yxatdan o\'tgan:' : 'Registered:'} ${new Date(userData.createdAt).toLocaleDateString()}</div>
                                 </div>
-                                <div class="user-email">${currentLanguage === 'ru' ? 'Логин:' : currentLanguage === 'uz' ? 'Login:' : 'Login:'} ${username}</div>
-                                <div class="user-date">${currentLanguage === 'ru' ? 'Зарегистрирован:' : currentLanguage === 'uz' ? 'Ro\'yxatdan o\'tgan:' : 'Registered:'} ${new Date(userData.createdAt).toLocaleDateString()}</div>
+                                <div class="user-actions">
+                                    <button class="btn-success" onclick="approveUser('${username}')">${currentLanguage === 'ru' ? 'Одобрить' : currentLanguage === 'uz' ? 'Tasdiqlash' : 'Approve'}</button>
+                                    <button class="btn-secondary" onclick="rejectUser('${username}')">${currentLanguage === 'ru' ? 'Отклонить' : currentLanguage === 'uz' ? 'Rad etish' : 'Reject'}</button>
+                                </div>
                             </div>
-                            <div class="user-actions">
-                                <button class="btn-success" onclick="approveUser('${username}')">${currentLanguage === 'ru' ? 'Одобрить' : currentLanguage === 'uz' ? 'Tasdiqlash' : 'Approve'}</button>
-                                <button class="btn-secondary" onclick="rejectUser('${username}')">${currentLanguage === 'ru' ? 'Отклонить' : currentLanguage === 'uz' ? 'Rad etish' : 'Reject'}</button>
-                            </div>
-                        </div>
-                    `;
-                    pendingList.appendChild(userCard);
-                }
-            });
+                        `;
+                        pendingList.appendChild(userCard);
+                    }
+                });
 
-            if (pendingList.children.length === 0) {
-                pendingList.innerHTML = `<p class="text-gray-400 text-center">${currentLanguage === 'ru' ? 'Нет пользователей ожидающих подтверждения' : currentLanguage === 'uz' ? 'Tasdiqni kutayotgan foydalanuvchilar yo\'q' : 'No users waiting for confirmation'}</p>`;
+                if (pendingList.children.length === 0) {
+                    pendingList.innerHTML = `<p class="text-gray-400 text-center">${currentLanguage === 'ru' ? 'Нет пользователей ожидающих подтверждения' : currentLanguage === 'uz' ? 'Tasdiqni kutayotgan foydalanuvchilar yo\'q' : 'No users waiting for confirmation'}</p>`;
+                }
+            } catch (error) {
+                console.error('Error loading pending users:', error);
+                pendingList.innerHTML = `<p class="text-red-400 text-center">${currentLanguage === 'ru' ? 'Ошибка загрузки' : 'Error loading users'}</p>`;
             }
         }
 
-        function loadAdminActiveUsers() {
+        async function loadAdminActiveUsers() {
             const activeList = document.getElementById('adminActiveUsersList');
             if (!activeList) return;
             
-            activeList.innerHTML = '';
+            activeList.innerHTML = '<p class="text-center">Загрузка...</p>';
             
-            Object.entries(users).forEach(([username, userData]) => {
+            try {
+                const result = await API.getUsers();
+                const allUsers = result.users || {};
+                activeList.innerHTML = '';
+                
+                Object.entries(allUsers).forEach(([username, userData]) => {
                 if (userData.status === 'active' && userData.role !== 'admin') {
                     const isExpired = userData.accessExpires && new Date(userData.accessExpires) < new Date();
                     const statusClass = isExpired ? 'status-expired' : 'status-active';
@@ -4299,21 +4353,30 @@
                     `;
                     activeList.appendChild(userCard);
                 }
-            });
+                });
 
-            if (activeList.children.length === 0) {
-                activeList.innerHTML = `<p class="text-gray-400 text-center">${currentLanguage === 'ru' ? 'Нет активных пользователей' : currentLanguage === 'uz' ? 'Faol foydalanuvchilar yo\'q' : 'No active users'}</p>`;
+                if (activeList.children.length === 0) {
+                    activeList.innerHTML = `<p class="text-gray-400 text-center">${currentLanguage === 'ru' ? 'Нет активных пользователей' : currentLanguage === 'uz' ? 'Faol foydalanuvchilar yo\'q' : 'No active users'}</p>`;
+                }
+            } catch (error) {
+                console.error('Error loading active users:', error);
+                activeList.innerHTML = `<p class="text-red-400 text-center">${currentLanguage === 'ru' ? 'Ошибка загрузки' : 'Error loading users'}</p>`;
             }
         }
 
-        function loadAdminSuspendedUsers() {
+        async function loadAdminSuspendedUsers() {
             const suspendedList = document.getElementById('adminSuspendedUsersList');
             if (!suspendedList) return;
             
-            suspendedList.innerHTML = '';
-            let hasSuspendedUsers = false;
+            suspendedList.innerHTML = '<p class="text-center">Загрузка...</p>';
             
-            Object.entries(users).forEach(([username, userData]) => {
+            try {
+                const result = await API.getUsers();
+                const allUsers = result.users || {};
+                suspendedList.innerHTML = '';
+                let hasSuspendedUsers = false;
+                
+                Object.entries(allUsers).forEach(([username, userData]) => {
                 if (userData.status === 'suspended') {
                     hasSuspendedUsers = true;
                     const userCard = document.createElement('div');
@@ -4337,58 +4400,77 @@
                     `;
                     suspendedList.appendChild(userCard);
                 }
-            });
+                });
 
-            if (!hasSuspendedUsers) {
-                suspendedList.innerHTML = `
-                    <div class="empty-state">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                        </svg>
-                        <p>${currentLanguage === 'ru' ? 'Нет заблокированных пользователей' : currentLanguage === 'uz' ? 'Bloklangan foydalanuvchilar yo\'q' : 'No suspended users'}</p>
-                    </div>
-                `;
+                if (!hasSuspendedUsers) {
+                    suspendedList.innerHTML = `
+                        <div class="empty-state">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                            </svg>
+                            <p>${currentLanguage === 'ru' ? 'Нет заблокированных пользователей' : currentLanguage === 'uz' ? 'Bloklangan foydalanuvchilar yo\'q' : 'No suspended users'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading suspended users:', error);
+                suspendedList.innerHTML = `<p class="text-red-400 text-center">${currentLanguage === 'ru' ? 'Ошибка загрузки' : 'Error loading users'}</p>`;
             }
         }
 
-        function approveUser(username) {
+        async function approveUser(username) {
             if (confirm(`${currentLanguage === 'ru' ? 'Одобрить пользователя' : currentLanguage === 'uz' ? 'Foydalanuvchini tasdiqlash' : 'Approve user'} ${username}?`)) {
-                users[username].status = 'active';
-                // Set default access for 30 days
-                const expiryDate = new Date();
-                expiryDate.setDate(expiryDate.getDate() + 30);
-                users[username].accessExpires = expiryDate.toISOString().split('T')[0];
-                
-                localStorage.setItem(USERS_KEY, JSON.stringify(users));
-                loadAdminPendingUsers();
-                loadAdminActiveUsers();
-                loadAdminSuspendedUsers();
-                alert(currentLanguage === 'ru' ? 'Пользователь одобрен!' : currentLanguage === 'uz' ? 'Foydalanuvchi tasdiqlandi!' : 'User approved!');
+                try {
+                    // Set default access for 30 days
+                    const expiryDate = new Date();
+                    expiryDate.setDate(expiryDate.getDate() + 30);
+                    
+                    await API.updateUser(username, {
+                        status: 'active',
+                        accessExpires: expiryDate.toISOString().split('T')[0]
+                    });
+                    
+                    loadAdminPendingUsers();
+                    loadAdminActiveUsers();
+                    loadAdminSuspendedUsers();
+                    alert(currentLanguage === 'ru' ? 'Пользователь одобрен!' : currentLanguage === 'uz' ? 'Foydalanuvchi tasdiqlandi!' : 'User approved!');
+                } catch (error) {
+                    console.error('Error approving user:', error);
+                    alert(currentLanguage === 'ru' ? `Ошибка: ${error.message}` : `Error: ${error.message}`);
+                }
             }
         }
 
-        function rejectUser(username) {
+        async function rejectUser(username) {
             if (confirm(`${currentLanguage === 'ru' ? 'Отклонить пользователя' : currentLanguage === 'uz' ? 'Foydalanuvchini rad etish' : 'Reject user'} ${username}?`)) {
-                delete users[username];
-                localStorage.setItem(USERS_KEY, JSON.stringify(users));
-                loadAdminPendingUsers();
-                loadAdminActiveUsers();
-                loadAdminSuspendedUsers();
-                alert(currentLanguage === 'ru' ? 'Пользователь отклонен!' : currentLanguage === 'uz' ? 'Foydalanuvchi rad etildi!' : 'User rejected!');
+                try {
+                    await API.deleteUser(username);
+                    loadAdminPendingUsers();
+                    loadAdminActiveUsers();
+                    loadAdminSuspendedUsers();
+                    alert(currentLanguage === 'ru' ? 'Пользователь отклонен!' : currentLanguage === 'uz' ? 'Foydalanuvchi rad etildi!' : 'User rejected!');
+                } catch (error) {
+                    console.error('Error rejecting user:', error);
+                    alert(currentLanguage === 'ru' ? `Ошибка: ${error.message}` : `Error: ${error.message}`);
+                }
             }
         }
 
-        function restoreUser(username) {
+        async function restoreUser(username) {
             if (confirm(`${currentLanguage === 'ru' ? 'Восстановить пользователя' : currentLanguage === 'uz' ? 'Foydalanuvchini tiklash' : 'Restore user'} ${username}?`)) {
-                users[username].status = 'active';
-                localStorage.setItem(USERS_KEY, JSON.stringify(users));
-                loadAdminActiveUsers();
-                loadAdminSuspendedUsers();
-                alert(`${currentLanguage === 'ru' ? 'Пользователь' : currentLanguage === 'uz' ? 'Foydalanuvchi' : 'User'} ${username} ${currentLanguage === 'ru' ? 'восстановлен!' : currentLanguage === 'uz' ? 'tiklandi!' : 'restored!'}`);
+                try {
+                    await API.updateUser(username, { status: 'active' });
+                    loadAdminActiveUsers();
+                    loadAdminSuspendedUsers();
+                    alert(`${currentLanguage === 'ru' ? 'Пользователь' : currentLanguage === 'uz' ? 'Foydalanuvchi' : 'User'} ${username} ${currentLanguage === 'ru' ? 'восстановлен!' : currentLanguage === 'uz' ? 'tiklandi!' : 'restored!'}`);
+                } catch (error) {
+                    console.error('Error restoring user:', error);
+                    alert(currentLanguage === 'ru' ? `Ошибка: ${error.message}` : `Error: ${error.message}`);
+                }
             }
         }
 
-        function extendAccess(username) {
+        async function extendAccess(username) {
             const dateInput = document.getElementById(`adminAccessDate-${username}`);
             const newDate = dateInput.value;
             
@@ -4406,26 +4488,38 @@
                 return;
             }
 
-            users[username].accessExpires = newDate;
-            users[username].status = 'active';
-            localStorage.setItem(USERS_KEY, JSON.stringify(users));
-            loadAdminActiveUsers();
-            alert(`${currentLanguage === 'ru' ? 'Доступ для' : currentLanguage === 'uz' ? 'Uchun kirish' : 'Access for'} ${username} ${currentLanguage === 'ru' ? 'продлен до' : currentLanguage === 'uz' ? 'gacha uzaytirildi' : 'extended until'} ${newDate}`);
-            dateInput.value = '';
-        }
-
-        function suspendUser(username) {
-            if (confirm(`${currentLanguage === 'ru' ? 'Заблокировать пользователя' : currentLanguage === 'uz' ? 'Foydalanuvchini bloklash' : 'Suspend user'} ${username}?`)) {
-                users[username].status = 'suspended';
-                users[username].suspendedAt = new Date().toISOString();
-                localStorage.setItem(USERS_KEY, JSON.stringify(users));
+            try {
+                await API.updateUser(username, {
+                    accessExpires: newDate,
+                    status: 'active'
+                });
                 loadAdminActiveUsers();
-                loadAdminSuspendedUsers();
-                alert(currentLanguage === 'ru' ? 'Пользователь заблокирован!' : currentLanguage === 'uz' ? 'Foydalanuvchi bloklandi!' : 'User suspended!');
+                alert(`${currentLanguage === 'ru' ? 'Доступ для' : currentLanguage === 'uz' ? 'Uchun kirish' : 'Access for'} ${username} ${currentLanguage === 'ru' ? 'продлен до' : currentLanguage === 'uz' ? 'gacha uzaytirildi' : 'extended until'} ${newDate}`);
+                dateInput.value = '';
+            } catch (error) {
+                console.error('Error extending access:', error);
+                alert(currentLanguage === 'ru' ? `Ошибка: ${error.message}` : `Error: ${error.message}`);
             }
         }
 
-        function deleteUser(username) {
+        async function suspendUser(username) {
+            if (confirm(`${currentLanguage === 'ru' ? 'Заблокировать пользователя' : currentLanguage === 'uz' ? 'Foydalanuvchini bloklash' : 'Suspend user'} ${username}?`)) {
+                try {
+                    await API.updateUser(username, {
+                        status: 'suspended',
+                        suspendedAt: new Date().toISOString()
+                    });
+                    loadAdminActiveUsers();
+                    loadAdminSuspendedUsers();
+                    alert(currentLanguage === 'ru' ? 'Пользователь заблокирован!' : currentLanguage === 'uz' ? 'Foydalanuvchi bloklandi!' : 'User suspended!');
+                } catch (error) {
+                    console.error('Error suspending user:', error);
+                    alert(currentLanguage === 'ru' ? `Ошибка: ${error.message}` : `Error: ${error.message}`);
+                }
+            }
+        }
+
+        async function deleteUser(username) {
             if (username === 'Kvv') {
                 alert(currentLanguage === 'ru' ? 'Нельзя удалить главного администратора' : 
                       currentLanguage === 'uz' ? 'Bosh administratorni o\'chirib bo\'lmaydi' : 
@@ -4434,14 +4528,18 @@
             }
             
             if (confirm(`${currentLanguage === 'ru' ? 'Удалить пользователя' : currentLanguage === 'uz' ? 'Foydalanuvchini o\'chirish' : 'Delete user'} ${username}?`)) {
-                delete users[username];
-                localStorage.setItem(USERS_KEY, JSON.stringify(users));
-                loadAdminActiveUsers();
-                loadAdminSuspendedUsers();
-                
-                // If current user was deleted, log them out
-                if (currentUser && currentUser.username === username) {
-                    logout();
+                try {
+                    await API.deleteUser(username);
+                    loadAdminActiveUsers();
+                    loadAdminSuspendedUsers();
+                    
+                    // If current user was deleted, log them out
+                    if (currentUser && currentUser.username === username) {
+                        logout();
+                    }
+                } catch (error) {
+                    console.error('Error deleting user:', error);
+                    alert(currentLanguage === 'ru' ? `Ошибка: ${error.message}` : `Error: ${error.message}`);
                 }
             }
         }
@@ -4454,16 +4552,19 @@
         }
 
         // Update residents count when resident is added/removed
-        function updateUserResidentsCount() {
+        async function updateUserResidentsCount() {
             if (!currentUser) return;
             
             const userResidents = roomsManager.residents.filter(resident => {
                 return true;
             }).length;
             
-            if (users[currentUser.username]) {
-                users[currentUser.username].residentsCount = userResidents;
-                localStorage.setItem(USERS_KEY, JSON.stringify(users));
+            try {
+                await API.updateUser(currentUser.username, {
+                    residentsCount: userResidents
+                });
+            } catch (error) {
+                console.error('Error updating residents count:', error);
             }
         }
 
@@ -4487,11 +4588,18 @@
         }
 
         // Check if user is already logged in
-        function checkAuthentication() {
+        async function checkAuthentication() {
             const savedUser = localStorage.getItem('current_user');
-            if (savedUser) {
+            const authToken = localStorage.getItem('auth_token');
+            
+            // Если есть и пользователь и токен, показываем приложение
+            if (savedUser && authToken) {
                 currentUser = JSON.parse(savedUser);
-                showApplication();
+                await showApplication();
+            } else {
+                // Если нет токена или пользователя, очищаем данные
+                localStorage.removeItem('current_user');
+                localStorage.removeItem('auth_token');
             }
         }
 
@@ -4593,53 +4701,34 @@
 
             // Storage functions
             loadFromStorage: async function() {
-                // Сначала пытаемся загрузить с сервера
                 let loadedFromServer = false;
                 const token = localStorage.getItem('auth_token');
                 
-                if (token && typeof API_BASE_URL !== 'undefined') {
+                if (token && typeof API !== 'undefined') {
                     try {
-                        console.log('📥 Загрузка комнат с сервера...');
-                        const response = await fetch(API_BASE_URL + '/rooms', {
-                            method: 'GET',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${token}`
-                            }
-                        });
+                        console.log('📥 Загрузка комнат с сервера через API...');
+                        const roomsData = await API.getRooms();
                         
-                        if (response.ok) {
-                            const data = await response.json();
-                            const roomsData = data.rooms || {};
-                            
-                            console.log('📦 Полученные данные с сервера:', roomsData);
-                            
-                            // Проверяем разные форматы данных
-                            if (roomsData.rooms) {
-                                // Новый формат: {rooms: ..., bedsState: ..., etc}
-                                this.roomsConfig = Array.isArray(roomsData.rooms) ? roomsData.rooms : 
-                                                  (typeof roomsData.rooms === 'object' ? Object.values(roomsData.rooms) : []);
+                        console.log('📦 Полученные данные с сервера:', roomsData);
+                        
+                        // Backend возвращает: {rooms: [], bedsState: {}, residents: [], bedNumbers: {}}
+                        if (roomsData && typeof roomsData === 'object') {
+                            // Проверяем что это правильная структура
+                            if ('rooms' in roomsData) {
+                                this.roomsConfig = Array.isArray(roomsData.rooms) ? roomsData.rooms : [];
                                 this.bedsState = roomsData.bedsState || {};
-                                this.residents = roomsData.residents || {};
+                                this.residents = Array.isArray(roomsData.residents) ? roomsData.residents : [];
                                 this.bedNumbers = roomsData.bedNumbers || {};
                                 loadedFromServer = true;
-                                console.log('✅ Загружен новый формат! Комнат:', this.roomsConfig.length);
-                            } else if (Array.isArray(roomsData)) {
-                                // Старый формат: массив комнат
-                                this.roomsConfig = roomsData;
-                                loadedFromServer = true;
-                                console.log('✅ Загружен старый формат! Комнат:', this.roomsConfig.length);
-                            } else if (Object.keys(roomsData).length > 0) {
-                                // Объект комнат - преобразуем в массив
-                                this.roomsConfig = Object.values(roomsData);
-                                loadedFromServer = true;
-                                console.log('✅ Загружен объект, преобразован в массив! Комнат:', this.roomsConfig.length);
+                                console.log('✅ Загружены данные с сервера! Комнат:', this.roomsConfig.length, 'Жильцов:', this.residents.length);
+                            } else {
+                                console.log('📭 Сервер вернул данные в неожиданном формате:', roomsData);
                             }
-                            
-                            console.log('📊 roomsConfig:', this.roomsConfig);
+                        } else {
+                            console.log('📭 Сервер вернул пустые данные или неправильный формат');
                         }
                     } catch (error) {
-                        console.warn('⚠️ Не удалось загрузить с сервера:', error);
+                        console.warn('⚠️ Не удалось загрузить с сервера:', error.message);
                     }
                 }
                 
@@ -4735,6 +4824,17 @@
                 updateUserResidentsCount();
                 
                 // Сохраняем на сервер через API
+                const token = localStorage.getItem('auth_token');
+                if (!token) {
+                    console.warn('⚠️ Нет токена, сохранено только в localStorage');
+                    return;
+                }
+                
+                if (typeof API === 'undefined') {
+                    console.warn('⚠️ API не загружен, сохранено только в localStorage');
+                    return;
+                }
+                
                 try {
                     const roomsData = {
                         rooms: this.roomsConfig,
@@ -4743,35 +4843,15 @@
                         bedNumbers: this.bedNumbers
                     };
                     
-                    const token = localStorage.getItem('auth_token');
-                    if (!token) {
-                        console.warn('⚠️ Нет токена, сохранено только в localStorage');
-                        return;
-                    }
-                    
-                    console.log('💾 Отправка на сервер:', {
+                    console.log('💾 Отправка на сервер через API:', {
                         комнат: this.roomsConfig.length,
                         жильцов: this.residents.length
                     });
                     
-                    const response = await fetch(API_BASE_URL + '/rooms', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify(roomsData)
-                    });
-                    
-                    if (response.ok) {
-                        console.log('✅ Комнаты сохранены на сервер!');
-                    } else {
-                        const errorText = await response.text();
-                        console.error('❌ Ошибка ответа сервера:', errorText);
-                        throw new Error('Ошибка сохранения: ' + response.status);
-                    }
+                    await API.createRoom(roomsData);
+                    console.log('✅ Комнаты сохранены на сервер!');
                 } catch (error) {
-                    console.error('❌ Ошибка сохранения на сервер:', error);
+                    console.error('❌ Ошибка сохранения на сервер:', error.message);
                 }
             },
 
