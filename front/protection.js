@@ -76,18 +76,28 @@ window.addEventListener('beforeprint', function(e) {
 console.log('%c🛡️ ЗАЩИТА АКТИВИРОВАНА', 'color: red; font-size: 20px; font-weight: bold');
 console.log('%cВнимание! Попытки взлома или обхода системы защиты преследуются по закону.', 'color: orange; font-size: 14px');
 
-// 7. Детект DevTools
-let devtoolsOpen = false;
-const threshold = 160;
+// 7. Детект DevTools (только для desktop)
+// Проверяем является ли устройство мобильным
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                 window.innerWidth <= 768;
 
-setInterval(function() {
-    if (window.outerWidth - window.innerWidth > threshold || 
-        window.outerHeight - window.innerHeight > threshold) {
-        if (!devtoolsOpen) {
-            devtoolsOpen = true;
-            document.body.innerHTML = '<div style="display: flex; justify-content: center; align-items: center; height: 100vh; background: #070518; color: white; font-size: 24px; text-align: center;"><div><h1 style="color: #ff4757;">⚠️ Инструменты разработчика обнаружены!</h1><p>Закройте DevTools и обновите страницу.</p></div></div>';
+// Запускаем детектор только на desktop устройствах
+if (!isMobile) {
+    let devtoolsOpen = false;
+    const threshold = 160;
+
+    setInterval(function() {
+        if (window.outerWidth - window.innerWidth > threshold || 
+            window.outerHeight - window.innerHeight > threshold) {
+            if (!devtoolsOpen) {
+                devtoolsOpen = true;
+                document.body.innerHTML = '<div style="display: flex; justify-content: center; align-items: center; height: 100vh; background: #070518; color: white; font-size: 24px; text-align: center;"><div><h1 style="color: #ff4757;">⚠️ Инструменты разработчика обнаружены!</h1><p>Закройте DevTools и обновите страницу.</p></div></div>';
+            }
         }
-    }
-}, 500);
+    }, 500);
+    console.log('🖥️ Desktop detected - DevTools detector active');
+} else {
+    console.log('📱 Mobile detected - DevTools detector disabled');
+}
 
 console.log('✅ Protection.js loaded');
