@@ -129,6 +129,13 @@ const API = {
         });
     },
     
+    async register(username, password) {
+        return apiRequest('/auth/register', {
+            method: 'POST',
+            body: JSON.stringify({ username, password })
+        });
+    },
+    
     async verifyToken() {
         return apiRequest('/auth/verify', {
             method: 'GET'

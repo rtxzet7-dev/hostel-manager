@@ -26,6 +26,12 @@ window.login = async function() {
         
         console.log('✅ Вход выполнен через API!', result);
         
+        // Сохраняем токен
+        if (result.token) {
+            localStorage.setItem('auth_token', result.token);
+            console.log('🔑 Токен сохранен:', result.token);
+        }
+        
         // Сохраняем данные пользователя
         currentUser = {
             username: username,
@@ -33,6 +39,12 @@ window.login = async function() {
         };
         
         localStorage.setItem('current_user', JSON.stringify(currentUser));
+        
+        // Запускаем автопроверку токена
+        if (typeof startTokenVerificationTimer === 'function') {
+            startTokenVerificationTimer();
+        }
+        
         showApplication();
         
         // ВАЖНО: Загружаем комнаты с сервера после входа

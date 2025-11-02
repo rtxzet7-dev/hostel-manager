@@ -3750,13 +3750,24 @@
                     return;
                 }
 
-                // Успешный вход - сохраняем токен (уже сохранен в API.login)
+                // Успешный вход - сохраняем токен
+                if (result.token) {
+                    localStorage.setItem('auth_token', result.token);
+                    console.log('🔑 Токен сохранен:', result.token);
+                }
+                
                 currentUser = {
-                    username: result.username,
-                    role: result.role
+                    username: result.user.username,
+                    role: result.user.role
                 };
 
                 localStorage.setItem('current_user', JSON.stringify(currentUser));
+                
+                // Запускаем автопроверку токена
+                if (typeof startTokenVerificationTimer === 'function') {
+                    startTokenVerificationTimer();
+                }
+                
                 messageEl.textContent = '';
                 showApplication();
             } catch (error) {
@@ -3773,6 +3784,11 @@
             currentUser = null;
             localStorage.removeItem('current_user');
             localStorage.removeItem('auth_token'); // Удаляем токен
+            
+            // Останавливаем автопроверку токена
+            if (typeof stopTokenVerificationTimer === 'function') {
+                stopTokenVerificationTimer();
+            }
             
             // Сбрасываем флаг загрузки персонала для повторной загрузки при входе
             staffDataLoaded = false;
@@ -4322,9 +4338,6 @@
                 return;
             }
             
-            // Generate unique ID
-            const employeeId = Date.now().toString();
-            
             const employeeData = {
                 name: name,
                 position: position,
@@ -4332,18 +4345,26 @@
                 workedDays: {}
             };
             
-            staffData[employeeId] = employeeData;
-            
-            // Сохраняем на сервер
+            // Сохраняем на сервер и используем ID от сервера
             const token = localStorage.getItem('auth_token');
+            let employeeId;
+            
             if (token && typeof API !== 'undefined') {
                 try {
-                    await API.createStaff(employeeData);
-                    console.log('✅ Сотрудник добавлен на сервер');
+                    const result = await API.createStaff(employeeData);
+                    employeeId = result.id; // Используем ID от сервера
+                    console.log('✅ Сотрудник добавлен на сервер с ID:', employeeId);
                 } catch (error) {
                     console.error('❌ Ошибка добавления на сервер:', error.message);
+                    // Если не удалось сохранить на сервер, используем локальный ID
+                    employeeId = Date.now().toString();
                 }
+            } else {
+                // Если нет API, используем локальный ID
+                employeeId = Date.now().toString();
             }
+            
+            staffData[employeeId] = employeeData;
             
             await saveStaffData();
             renderStaff();
@@ -4870,10 +4891,24 @@
             const savedUser = localStorage.getItem('current_user');
             const authToken = localStorage.getItem('auth_token');
             
-            // Если есть и пользователь и токен, показываем приложение
+            // Если есть и пользователь и токен, проверяем валидность на сервере
             if (savedUser && authToken) {
-                currentUser = JSON.parse(savedUser);
-                await showApplication();
+                // Проверяем токен на сервере если доступна функция
+                if (typeof verifyTokenOnLoad === 'function') {
+                    const isValid = await verifyTokenOnLoad();
+                    if (isValid) {
+                        currentUser = JSON.parse(localStorage.getItem('current_user'));
+                        await showApplication();
+                    } else {
+                        // Токен невалидный, очищаем данные
+                        localStorage.removeItem('current_user');
+                        localStorage.removeItem('auth_token');
+                    }
+                } else {
+                    // Если функция недоступна, используем старый метод
+                    currentUser = JSON.parse(savedUser);
+                    await showApplication();
+                }
             } else {
                 // Если нет токена или пользователя, очищаем данные
                 localStorage.removeItem('current_user');
@@ -5997,6 +6032,7 @@
     </script>
     
     <!-- API Integration - должен быть загружен ПОСЛЕ всех других скриптов -->
+    <script src="token-verification.js"></script>
     <script src="api-integration.js"></script>
     <script src="date-picker-modal.js"></script>
     <script src="admin-api-integration.js"></script>

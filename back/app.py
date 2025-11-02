@@ -430,58 +430,78 @@ def delete_all_rooms(current_user):
 @app.route('/api/staff', methods=['GET'])
 @token_required
 def get_staff(current_user):
-    """Получить весь персонал"""
-    staff = load_json(STAFF_FILE)
-    return jsonify({'staff': staff}), 200
+    """Получить персонал текущего пользователя"""
+    all_staff = load_json(STAFF_FILE)
+    
+    # Возвращаем только данные текущего пользователя
+    user_staff = all_staff.get(current_user, {})
+    
+    return jsonify({'staff': user_staff}), 200
 
 @app.route('/api/staff', methods=['POST'])
 @token_required
 def create_staff(current_user):
-    """Создать нового сотрудника"""
+    """Создать нового сотрудника для текущего пользователя"""
     data = request.json
-    staff = load_json(STAFF_FILE)
+    all_staff = load_json(STAFF_FILE)
+    
+    # Инициализируем данные пользователя если их нет
+    if current_user not in all_staff:
+        all_staff[current_user] = {}
     
     employee_id = str(int(datetime.now().timestamp() * 1000))
-    staff[employee_id] = data
+    all_staff[current_user][employee_id] = data
     
-    save_json(STAFF_FILE, staff)
+    save_json(STAFF_FILE, all_staff)
     
     return jsonify({
         'message': 'Employee created successfully',
-        'employee': staff[employee_id],
+        'employee': all_staff[current_user][employee_id],
         'id': employee_id
     }), 201
 
 @app.route('/api/staff/<employee_id>', methods=['PUT'])
 @token_required
 def update_staff(current_user, employee_id):
-    """Обновить сотрудника"""
-    staff = load_json(STAFF_FILE)
+    """Обновить сотрудника текущего пользователя"""
+    all_staff = load_json(STAFF_FILE)
     
-    if employee_id not in staff:
+    # Инициализируем данные пользователя если их нет
+    if current_user not in all_staff:
+        all_staff[current_user] = {}
+    
+    user_staff = all_staff[current_user]
+    
+    if employee_id not in user_staff:
         return jsonify({'error': 'Employee not found'}), 404
     
     data = request.json
-    staff[employee_id] = data
+    all_staff[current_user][employee_id] = data
     
-    save_json(STAFF_FILE, staff)
+    save_json(STAFF_FILE, all_staff)
     
     return jsonify({
         'message': 'Employee updated successfully',
-        'employee': staff[employee_id]
+        'employee': all_staff[current_user][employee_id]
     }), 200
 
 @app.route('/api/staff/<employee_id>', methods=['DELETE'])
 @token_required
 def delete_staff(current_user, employee_id):
-    """Удалить сотрудника"""
-    staff = load_json(STAFF_FILE)
+    """Удалить сотрудника текущего пользователя"""
+    all_staff = load_json(STAFF_FILE)
     
-    if employee_id not in staff:
+    # Инициализируем данные пользователя если их нет
+    if current_user not in all_staff:
+        all_staff[current_user] = {}
+    
+    user_staff = all_staff[current_user]
+    
+    if employee_id not in user_staff:
         return jsonify({'error': 'Employee not found'}), 404
     
-    del staff[employee_id]
-    save_json(STAFF_FILE, staff)
+    del all_staff[current_user][employee_id]
+    save_json(STAFF_FILE, all_staff)
     
     return jsonify({'message': 'Employee deleted successfully'}), 200
 
