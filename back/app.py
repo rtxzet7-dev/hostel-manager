@@ -322,14 +322,25 @@ def get_rooms(current_user):
     # Возвращаем только данные текущего пользователя
     user_rooms = all_rooms.get(current_user, {})
     
-    # Если пусто, возвращаем пустую структуру
-    if not user_rooms:
-        user_rooms = {
-            'rooms': [],
-            'bedsState': {},
-            'residents': [],
-            'bedNumbers': {}
-        }
+    # Если у пользователя нет своих данных, проверяем общие данные (старый формат)
+    if not user_rooms or not user_rooms.get('rooms'):
+        # Проверяем есть ли общие данные в старом формате
+        if 'rooms' in all_rooms and all_rooms['rooms']:
+            print(f"⚠️ У пользователя {current_user} нет данных, возвращаем общие данные")
+            user_rooms = {
+                'rooms': all_rooms.get('rooms', []),
+                'bedsState': all_rooms.get('bedsState', {}),
+                'residents': all_rooms.get('residents', []),
+                'bedNumbers': all_rooms.get('bedNumbers', {})
+            }
+        else:
+            # Если и общих данных нет, возвращаем пустую структуру
+            user_rooms = {
+                'rooms': [],
+                'bedsState': {},
+                'residents': [],
+                'bedNumbers': {}
+            }
     
     print(f"📥 Загрузка комнат для {current_user}: {len(user_rooms.get('rooms', [])) if isinstance(user_rooms.get('rooms'), list) else 'unknown'}")
     

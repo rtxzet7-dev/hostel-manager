@@ -4235,9 +4235,20 @@
                 const result = await API.getStaff();
                 
                 if (result && typeof result === 'object') {
-                    staffData = result;
-                    staffDataLoaded = true;
-                    console.log('✅ Персонал загружен с сервера! Сотрудников:', Object.keys(staffData).length);
+                    // ЗАЩИТА: Проверяем, есть ли данные с сервера
+                    const serverHasData = Object.keys(result).length > 0;
+                    
+                    if (serverHasData) {
+                        // Сервер вернул данные - используем их
+                        staffData = result;
+                        staffDataLoaded = true;
+                        console.log('✅ Персонал загружен с сервера! Сотрудников:', Object.keys(staffData).length);
+                    } else {
+                        // Сервер вернул пустой объект - загружаем из localStorage
+                        console.warn('⚠️ Сервер вернул пустые данные персонала, загрузка из localStorage...');
+                        staffData = JSON.parse(localStorage.getItem('hostelStaff')) || {};
+                        staffDataLoaded = true;
+                    }
                 } else {
                     // Fallback to localStorage
                     console.log('📁 Сервер вернул пустые данные, загрузка из localStorage...');
@@ -4895,14 +4906,17 @@
             if (savedUser && authToken) {
                 // Проверяем токен на сервере если доступна функция
                 if (typeof verifyTokenOnLoad === 'function') {
-                    const isValid = await verifyTokenOnLoad();
-                    if (isValid) {
+                    const result = await verifyTokenOnLoad();
+                    if (result.valid) {
                         currentUser = JSON.parse(localStorage.getItem('current_user'));
                         await showApplication();
                     } else {
-                        // Токен невалидный, очищаем данные
-                        localStorage.removeItem('current_user');
-                        localStorage.removeItem('auth_token');
+                        // Очищаем данные только если токен действительно невалидный,
+                        // а не при ошибке сети
+                        if (result.reason === 'invalid_token' || result.reason === 'no_token') {
+                            localStorage.removeItem('current_user');
+                            localStorage.removeItem('auth_token');
+                        }
                     }
                 } else {
                     // Если функция недоступна, используем старый метод
@@ -5025,12 +5039,24 @@
                         if (roomsData && typeof roomsData === 'object') {
                             // Проверяем что это правильная структура
                             if ('rooms' in roomsData) {
-                                this.roomsConfig = Array.isArray(roomsData.rooms) ? roomsData.rooms : [];
-                                this.bedsState = roomsData.bedsState || {};
-                                this.residents = Array.isArray(roomsData.residents) ? roomsData.residents : [];
-                                this.bedNumbers = roomsData.bedNumbers || {};
-                                loadedFromServer = true;
-                                console.log('✅ Загружены данные с сервера! Комнат:', this.roomsConfig.length, 'Жильцов:', this.residents.length);
+                                // ЗАЩИТА: Проверяем, не пустые ли данные с сервера
+                                const serverRooms = Array.isArray(roomsData.rooms) ? roomsData.rooms : [];
+                                const serverResidents = Array.isArray(roomsData.residents) ? roomsData.residents : [];
+                                const serverHasData = serverRooms.length > 0 || serverResidents.length > 0;
+                                
+                                if (serverHasData) {
+                                    // Сервер вернул данные - используем их
+                                    this.roomsConfig = serverRooms;
+                                    this.bedsState = roomsData.bedsState || {};
+                                    this.residents = serverResidents;
+                                    this.bedNumbers = roomsData.bedNumbers || {};
+                                    loadedFromServer = true;
+                                    console.log('✅ Загружены данные с сервера! Комнат:', this.roomsConfig.length, 'Жильцов:', this.residents.length);
+                                } else {
+                                    // Сервер вернул пустые данные - загрузим из localStorage
+                                    console.warn('⚠️ Сервер вернул пустые данные, будет использован localStorage');
+                                    loadedFromServer = false;
+                                }
                             } else {
                                 console.log('📭 Сервер вернул данные в неожиданном формате:', roomsData);
                             }
@@ -5071,7 +5097,14 @@
                                 } 
                             }
                         ];
-                        this.saveToStorage();
+                        // ВАЖНО: НЕ сохраняем на сервер автоматически!
+                        // Это может перезаписать реальные данные на сервере
+                        // Сохраняем только в localStorage
+                        localStorage.setItem(this.ROOMS_KEY, JSON.stringify(this.roomsConfig));
+                        localStorage.setItem(this.BEDS_STATE_KEY, JSON.stringify(this.bedsState));
+                        localStorage.setItem(this.RESIDENTS_KEY, JSON.stringify(this.residents));
+                        localStorage.setItem(this.BED_NUMBERS_KEY, JSON.stringify(this.bedNumbers));
+                        console.log('📝 Создана комната по умолчанию (только в localStorage)');
                     }
                     if (savedState) {
                         this.bedsState = JSON.parse(savedState);
@@ -5121,7 +5154,11 @@
                 });
                 
                 if (updated) {
-                    this.saveToStorage();
+                    // ВАЖНО: НЕ сохраняем на сервер автоматически!
+                    // Это может перезаписать реальные данные
+                    // Сохраняем только в localStorage
+                    localStorage.setItem(this.BED_NUMBERS_KEY, JSON.stringify(this.bedNumbers));
+                    console.log('📝 Номера кроватей обновлены (только в localStorage)');
                 }
             },
 
@@ -6034,6 +6071,7 @@
     <!-- API Integration - должен быть загружен ПОСЛЕ всех других скриптов -->
     <script src="token-verification.js"></script>
     <script src="api-integration.js"></script>
+    <script src="rooms-api-integration.js"></script>
     <script src="date-picker-modal.js"></script>
     <script src="admin-api-integration.js"></script>
 

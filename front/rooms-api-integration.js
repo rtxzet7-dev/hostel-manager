@@ -85,10 +85,12 @@ if (window.roomsManager) {
             
             console.log('✅ Комнаты сохранены на сервер!');
             
-            // Также сохраняем в localStorage как резервную копию
-            if (originalSaveToStorage) {
-                originalSaveToStorage.call(this);
-            }
+            // Сохраняем в localStorage как резервную копию напрямую
+            // НЕ вызываем originalSaveToStorage, т.к. он тоже отправляет на сервер
+            localStorage.setItem('hostel_rooms_config_v12', JSON.stringify(this.roomsConfig));
+            localStorage.setItem('hostel_beds_state_v12', JSON.stringify(this.bedsState));
+            localStorage.setItem('hostel_residents_v12', JSON.stringify(this.residents));
+            localStorage.setItem('hostel_bed_numbers_v12', JSON.stringify(this.bedNumbers));
             
         } catch (error) {
             console.error('❌ Ошибка сохранения комнат:', error);
@@ -135,7 +137,36 @@ if (window.roomsManager) {
             
             console.log('✅ Комнаты загружены с сервера!', roomsData);
             
-            // Инициализируем пустые объекты если данных нет
+            // ЗАЩИТА: Проверяем, не пустые ли данные с сервера
+            const serverHasData = roomsData.rooms && (
+                (Array.isArray(roomsData.rooms) && roomsData.rooms.length > 0) ||
+                (typeof roomsData.rooms === 'object' && Object.keys(roomsData.rooms).length > 0)
+            ) || (roomsData.residents && (
+                (Array.isArray(roomsData.residents) && roomsData.residents.length > 0) ||
+                (typeof roomsData.residents === 'object' && Object.keys(roomsData.residents).length > 0)
+            ));
+            
+            // Если сервер вернул пустые данные, проверяем localStorage
+            if (!serverHasData && originalLoadFromStorage) {
+                console.warn('⚠️ Сервер вернул пустые данные! Проверяем localStorage...');
+                // Пробуем загрузить из localStorage
+                originalLoadFromStorage.call(this);
+                
+                // Если в localStorage тоже пусто, используем данные с сервера (пустые)
+                const localHasData = this.roomsConfig && (
+                    (Array.isArray(this.roomsConfig) && this.roomsConfig.length > 0) ||
+                    (typeof this.roomsConfig === 'object' && Object.keys(this.roomsConfig).length > 0)
+                );
+                
+                if (localHasData) {
+                    console.log('✅ Использованы данные из localStorage (сервер пустой)');
+                    return; // Выходим, используем данные из localStorage
+                } else {
+                    console.log('📭 И localStorage пуст, используем пустые данные с сервера');
+                }
+            }
+            
+            // Инициализируем данные с сервера
             this.roomsConfig = roomsData.rooms || {};
             this.bedsState = roomsData.bedsState || {};
             this.residents = roomsData.residents || {};
@@ -265,15 +296,8 @@ window.forceLoadRoomsFromServer = async function() {
     await window.roomsManager.loadFromStorage();
 };
 
-// Загружаем комнаты с сервера при запуске
-window.addEventListener('load', () => {
-    setTimeout(() => {
-        if (window.roomsManager && typeof window.roomsManager.loadFromStorage === 'function') {
-            console.log('🔄 Автозагрузка комнат с сервера...');
-            window.roomsManager.loadFromStorage();
-        }
-    }, 500);
-});
+// УБРАНА автозагрузка при старте - это вызывает конфликты и перезапись данных
+// Загрузка происходит через roomsManager.init() при входе в приложение
 
 console.log('✅ Rooms API интеграция активна!');
 console.log('🔒 Защита от оффлайн обхода включена!');

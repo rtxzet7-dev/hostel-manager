@@ -59,7 +59,7 @@ async function verifyTokenOnLoad() {
     const authToken = localStorage.getItem('auth_token');
     
     if (!savedUser || !authToken) {
-        return false;
+        return { valid: false, reason: 'no_token' };
     }
     
     try {
@@ -72,22 +72,25 @@ async function verifyTokenOnLoad() {
             localStorage.setItem('current_user', JSON.stringify(result.user));
             // Запускаем периодическую проверку
             startTokenVerificationTimer();
-            return true;
+            return { valid: true };
         } else {
             console.log('❌ Токен невалидный');
             localStorage.removeItem('current_user');
             localStorage.removeItem('auth_token');
-            return false;
+            return { valid: false, reason: 'invalid_token' };
         }
     } catch (error) {
         console.error('❌ Ошибка проверки токена:', error.message);
-        // При ошибке сети не блокируем, пробуем позже
+        // При ошибке сети не блокируем, пробуем позже - НЕ удаляем данные!
+        console.warn('⚠️ Ошибка сети, пользователь остаётся залогиненным до следующей проверки');
         const currentLang = localStorage.getItem('hostel_language') || 'ru';
-        const errorMsg = currentLang === 'ru' ? 'Не удалось проверить сессию. Проверьте подключение к интернету.' : 
-                        currentLang === 'uz' ? 'Sessiyani tekshirib bo\'lmadi.' : 
-                        'Cannot verify session.';
+        const errorMsg = currentLang === 'ru' ? 'Не удалось проверить сессию. Вы работаете в автономном режиме.' : 
+                        currentLang === 'uz' ? 'Sessiyani tekshirib bo\'lmadi. Oflayn rejimda ishlayapsiz.' : 
+                        'Cannot verify session. Working offline.';
         alert(errorMsg);
-        return false;
+        // Запускаем периодическую проверку, чтобы проверить позже
+        startTokenVerificationTimer();
+        return { valid: true, reason: 'network_error' }; // Считаем валидным при ошибке сети
     }
 }
 
